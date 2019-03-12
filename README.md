@@ -14,9 +14,9 @@ This document proposes a standard for QR code encoding that enables two-way comm
 
 The common ways to encode binary data in a QR code would include:
 
++ Base64 ASCII representation with Binary QR encoding: ~33.3% overhead.
 + Hexadecimal representation with Alphanumeric QR encoding: 37.5% overhead.
 + Hexadecimal ASCII representation with Binary QR encoding: 100% overhead.
-+ Base64 ASCII representation with Binary QR encoding: ~83.3% overhead.
 + Native Binary QR encoding: *no overhead*.
 
 For data density and simplicity **this standard will only use the native Binary QR encoding**.
