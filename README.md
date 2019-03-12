@@ -124,7 +124,7 @@ QR codes can only represent 2953 bytes, which is a harsh constraint as some tran
 
 + `frame` **MUST** the number of current frame, represented as big-endian 16-bit unsigned integer.
 + `frame_count` **MUST** the total number of frames, represented as big-endian 16-bit unsigned integer.
-+ `part_data` **MUST** data that should be stored by the Cold Signer, ordered by `frame` number, until all frames are scanned.
++ `part_data` **MUST** be stored by the Cold Signer, ordered by `frame` number, until all frames are scanned.
 + Hot Wallet **SHOULD** continuously loop through all the frames showing each frame for about 2 seconds.
 + Cold Signer **MUST** be able to start scanning the Multipart Payload _at any frame_.
 + Cold Signer **MUSTN'T** expect the frames to come in any particular order.
