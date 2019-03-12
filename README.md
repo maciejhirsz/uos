@@ -225,6 +225,7 @@ or
 + `HEX_R` **MUST** be a hexadecimal representation of `r` value of the Secp256k1 signature for the signed Payload.
 + `HEX_S` **MUST** be a hexadecimal representation of `s` value of the Secp256k1 signature for the signed Payload.
 + `HEX_V` **MUST** be a hexadecimal representation of `b` value of the Secp256k1 signature for the signed Payload.
++ `HEX_R`, `HEX_S`, and `HEX_V` **MUSTN'T** be prefixed with `0x`.
 + `v` and `HEX_V` **MUSTN'T** be combined with `CHAIN_ID`.
 + Hot Wallet **MUST** fold `CHAIN_ID` into the `v` value when constructing final transaction RLP.
 
