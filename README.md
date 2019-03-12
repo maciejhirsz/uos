@@ -232,7 +232,7 @@ Pseudocode for folding in `CHAIN_ID` into `v`:
 
 ```
 if chainId > 0 {
-v += (chainId * 2 + 8) & 0xFF;
+    v += (chainId * 2 + 8) & 0xFF;
 }
 ```
 
