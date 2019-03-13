@@ -143,7 +143,7 @@ Ethereum Payload follows the table:
 | Sign a transaction | `01`  | `01`  | `address` | `rlp`     |
 | Sign a message     | `01`  | `02`  | `address` | `message` |
 
-+ `address` **MUSTN'T** have any prefixes.
++ `address` **MUST NOT** have any prefixes.
 + `address` **MUST** be exactly 20 bytes long.
 + `address` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
 + `rlp` **MUST** be the [RLP](https://github.com/ethereum/wiki/wiki/RLP) encoded raw transaction with an empty signature being set in accordance with [EIP-155](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md): `v = CHAIN_ID`, `r = 0`, `s = 0`.
@@ -154,6 +154,7 @@ Ethereum Payload follows the table:
 + Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user for verification before signing.
 + Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure.
 + Hot Wallet **SHOULD** have a way to show [Legacy Ethereum Payload](#legacy-ethereum-payload) at user request.
++ Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
 TODO: Handle [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data.
 
