@@ -108,7 +108,7 @@ Payload is always read left-to-right, using prefixing to determine how it needs 
 |-----------|-----------------------------------------------------|
 | `00`      | [**Multipart Payload**](#multipart-payload)         |
 | `01`      | [Ethereum Payload](#ethereum-payload)               |
-| `02`      | [Substrate Payload](#substrate-payload) |
+| `02`      | [Substrate Payload](#substrate-payload)             |
 | `03...7A` | Extension range for other networks                  |
 | `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload) |
 | `7C...7F` | Extension range for other networks                  |
