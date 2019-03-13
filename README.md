@@ -96,7 +96,7 @@ ethereum:0x0000000000000000000000000000000000000000
 
 #### Substrate Introduction
 
-TBD
+TODO
 
 ---
 
@@ -143,7 +143,7 @@ Ethereum Payload follows the table:
 | Sign a transaction | `01`  | `01`  | `address` | `rlp`     |
 | Sign a message     | `01`  | `02`  | `address` | `message` |
 
-+ `address` **MUSTN'T** have any prefixes.
++ `address` **MUST NOT** have any prefixes.
 + `address` **MUST** be exactly 20 bytes long.
 + `address` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
 + `rlp` **MUST** be the [RLP](https://github.com/ethereum/wiki/wiki/RLP) encoded raw transaction with an empty signature being set in accordance with [EIP-155](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md): `v = CHAIN_ID`, `r = 0`, `s = 0`.
@@ -154,12 +154,36 @@ Ethereum Payload follows the table:
 + Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user for verification before signing.
 + Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure.
 + Hot Wallet **SHOULD** have a way to show [Legacy Ethereum Payload](#legacy-ethereum-payload) at user request.
++ Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
 TODO: Handle [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data.
 
 #### Substrate Payload
 
-TBD
+Substrate Payload follows the table:
+
+| Action                       | `[0]` | `[1]`  | `[2]`  | `[1..1+L]`  | `[1+L..]`                  |
+|------------------------------|-------|--------|--------|-------------|----------------------------|
+| Sign a transaction           | `02`  |`crypto`|  `00`  | `accountid` | `payload`                  |
+| Sign a transaction           | `02`  |`crypto`|  `01`  | `accountid` | `payload_hash`             |
+| Sign an immortal transaction | `02`  |`crypto`|  `02`  | `accountid` | `immortal_payload`         |
+| Sign a message               | `02`  |`crypto`|  `03`  | `accountid` | `message`                  |
+
+
++ `crypto` **MUST** be a recognised cryptographic algorithm. It implies the value of the `accountid` length, `L`. This **MUST** be one byte whose value is one of:
+  - `0x00`: Ed25519 (`L = 32`)
+  - `0x01`: Schnorr/Ristretto x25519 (`L = 32`)
++ `accountid` **MUST** be exactly `L` bytes long.
++ `accountid` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
++ `payload` **MUST** be the SCALE encoding of the tuple of transaction items `(nonce, call, era_description, era_header)`.
++ `payload_hash` **MUST** be the Blake2s 32-byte hash of the SCALE encoding of the tuple of transaction items `(nonce, call, era_description, era_header)`.
++ `immortal_payload` **MUST** be the SCALE encoding of the tuple of transaction items `(nonce, call)`.
++ Hot Wallet **MUST** use type `00` for signing a standard transaction type if the length of the `payload` is 256 bytes or fewer.
++ Hot Wallet **SHOULD** always prefer using type `00` even if the length of the payload is greater than 256 bytes since this allows the full payload to be provided and decoded for the user. If doing that is completely impractical (the message or the transaction is megabytes long and not suitable for Multipart Payload), type `01` may be used alternatively.
++ Cold Signer **SHOULD** decode the transaction details from the SCALE encoding and display them to the user for verification before signing.
++ Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user for verification before signing.
++ Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure, in the cash of type `01`.
++ Cold Signer **SHOULD** (at the user's discretion) sign the `message`, `immortal_payload`, or `payload` if `payload` is of length 256 bytes or fewer. If `payload` is longer than 256 bytes, then it **SHOULD** instead sign the Blake2s hash of `payload`.
 
 #### Legacy Ethereum Payload
 
