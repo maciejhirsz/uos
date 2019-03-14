@@ -2,7 +2,7 @@
 
 **THIS IS A DRAFT**
 
-This document proposes a standard for QR code encoding that enables two-way communication between a _Hot Wallet_ and a _Cold Signer_ with access to private keys, for the purpose of securely signing and broadcasting transactions and data on current and future decentralized networks (including non-Ethereum networks). The goal is have a single, inter-operable standard, allowing users to use any combination of a hot wallet and a cold signer without vendor locking.
+This document proposes a standard for QR code encoding that enables two-way communication between a _Hot Wallet_ and a _Cold Signer_ with access to private keys, for the purpose of securely signing and broadcasting transactions and data on current and future decentralized networks (including non-Ethereum networks). The goal is have a single, inter-operable standard, allowing users to use any combination of a Hot Wallet and a Cold Signer (defined below) without vendor locking.
 
 ## Design principles
 
@@ -45,8 +45,8 @@ For byte values this standard uses either a single hexadecimal value `AA`, or a 
 
 Additionally we will define the following terms to mean:
 
-+ **MUST** and **MUSTN'T** - expected behavior, breaking which break compatibility with this standard.
-+ **SHOULD** and **SHOULDN'T** - expected behavior although more fuzzily defined and breaking of which does not break compatibility with this standard.
++ **MUST** and **MUST NOT** - expected behavior, breaking which break compatibility with this standard.
++ **SHOULD** and **SHOULD NOT** - expected behavior although more fuzzily defined and breaking of which does not break compatibility with this standard.
 + **MAY** - behavior that is not part of this standard, but is allowed without breaking compatibility.
 
 ## Steps
@@ -77,7 +77,7 @@ The `address` format depends on the `scheme`.
 
 + `scheme` **MUST** be valid ASCII, beginning with a letter and followed by any number of letters, numbers, the period `.` character, the plus `+` character, or the hyphen `-` character.
 + `address` **MUST** be valid UTF-8, appropriate for a given network.
-+ Cold Signer **MUSTN'T** add any other information other than `scheme` and `address` to the string.
++ Cold Signer **MUST NOT** add any other information other than `scheme` and `address` to the string.
 + Hot Wallet **MAY** be able to read other information than required (such as is defined in EIP-681).
 + Hot Wallet **MAY** support any number of schemes/networks following this syntax.
 + For unsupported schemes/networks Hot Wallet **MUST** show the user an informative error, distinct from parsing failure, eg: `"Scheme {scheme} is not supported by {wallet name}"`.
@@ -96,7 +96,14 @@ ethereum:0x0000000000000000000000000000000000000000
 
 #### Substrate Introduction
 
-TODO
++ `scheme` **MUST** be a string `substrate`.
++ `address` **MUST** be base58 representation of the address.
+
+A correct Introduction for address `5GKhfyctwmW5LQdGaHTyU9qq2yDtggdJo719bj5ZUxnVGtmX` on a Substrate-based network is therefore a string:
+
+```
+substrate:5GKhfyctwmW5LQdGaHTyU9qq2yDtggdJo719bj5ZUxnVGtmX
+```
 
 ---
 
@@ -125,11 +132,11 @@ QR codes can only represent 2953 bytes, which is a harsh constraint as some tran
 + `frame` **MUST** the number of current frame, represented as big-endian 16-bit unsigned integer.
 + `frame_count` **MUST** the total number of frames, represented as big-endian 16-bit unsigned integer.
 + `part_data` **MUST** be stored by the Cold Signer, ordered by `frame` number, until all frames are scanned.
-+ Hot Wallet **SHOULD** continuously loop through all the frames showing each frame for about 2 seconds.
++ Hot Wallet **MUST** continuously loop through all the frames showing each frame for about 2 seconds.
 + Cold Signer **MUST** be able to start scanning the Multipart Payload _at any frame_.
-+ Cold Signer **MUSTN'T** expect the frames to come in any particular order.
++ Cold Signer **MUST NOT** expect the frames to come in any particular order.
 + Cold Signer **SHOULD** show a progress indicator of how many frames it has successfully scanned out of the total count.
-+ `part_data` for frame `0` **MUSTN'T** begin with byte `00` or byte `7B`.
++ `part_data` for frame `0` **MUST NOT** begin with byte `00` or byte `7B`.
 
 Once all frames are combined, the `part_data` must be concatenated into a single binary blob, and then interpreted as a completely new albeit larger Payload, starting from the prefix table above.
 
@@ -149,10 +156,10 @@ Ethereum Payload follows the table:
 + `rlp` **MUST** be the [RLP](https://github.com/ethereum/wiki/wiki/RLP) encoded raw transaction with an empty signature being set in accordance with [EIP-155](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md): `v = CHAIN_ID`, `r = 0`, `s = 0`.
 + `message` **MUST** be a binary or UTF-8 encoded message to sign **WITHOUT** any prefixes ([EIP-191](https://eips.ethereum.org/EIPS/eip-191) or otherwise).
 + `hash` **MUST** be a valid `keccak256` hash of either a transaction or a correctly prefixed message.
-+ Hot Wallet **SHOULD** always prefer sending either a full raw transaction or full message instead of a hash to sign, unless doing that is completely impractical (the message or the transaction is megabytes long and not suitable for Multipart Payload).
-+ Cold Signer **SHOULD** decode the transaction details from the RLP and display them to the user for verification before signing.
-+ Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user for verification before signing.
-+ Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure.
++ Hot Wallet **SHOULD** always prefer sending either a full raw transaction or full message instead of a hash to sign, so that the user can verify that the the Cold Signer is signing what the Hot Wallet presented them with. Occasionally this might be completely impractical (the message or the transaction is megabytes long and not suitable for Multipart Payload).
++ Cold Signer **SHOULD** decode the transaction details from the RLP and display them to the user, so that they can verify that the transaction hasn't been altered by the Hot Wallet.
++ Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user, so that the user can verify that the message hasn't been altered by the Hot Wallet.
++ Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure, because there is no easy way for the user to verify whether they are signing what they intended to sign.
 + Hot Wallet **SHOULD** have a way to show [Legacy Ethereum Payload](#legacy-ethereum-payload) at user request.
 + Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
@@ -212,12 +219,12 @@ or
 ```
 
 + `ADDRESS` **MUST** be a hexadecimal string representation of the address, exactly 40 characters long.
-+ `ADDRESS` **MUSTN'T** include the `0x` prefix.
++ `ADDRESS` **MUST NOT** include the `0x` prefix.
 + `RLP` **MUST** be a hexadecimal string representation of the [RLP](https://github.com/ethereum/wiki/wiki/RLP) encoded raw transaction with an empty signature being set in accordance with [EIP-155](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md): `v = CHAIN_ID`, `r = 0`, `s = 0`.
-+ `RLP` **MUSTN'T** include the `0x` prefix.
++ `RLP` **MUST NOT** include the `0x` prefix.
 + `DATA` **MUST** be a hexadecimal string representation of a binary or UTF-8 encoded message to sign **WITHOUT** any prefixes ([EIP-191](https://eips.ethereum.org/EIPS/eip-191) or otherwise).
-+ `DATA` **MUSTN'T** include the `0x` prefix.
-+ All **SHOULD**s from [Ethereum Payload](#ethereum-payload) apply here as well.
++ `DATA` **MUST NOT** include the `0x` prefix.
++ All _**SHOULD**s_ from [Ethereum Payload](#ethereum-payload) apply here as well.
 + Legacy Ethereum Payload does not support signing raw hashes.
 
 ---
@@ -249,8 +256,8 @@ or
 + `HEX_R` **MUST** be a hexadecimal representation of `r` value of the Secp256k1 signature for the signed Payload.
 + `HEX_S` **MUST** be a hexadecimal representation of `s` value of the Secp256k1 signature for the signed Payload.
 + `HEX_V` **MUST** be a hexadecimal representation of `b` value of the Secp256k1 signature for the signed Payload.
-+ `HEX_R`, `HEX_S`, and `HEX_V` **MUSTN'T** be prefixed with `0x`.
-+ `v` and `HEX_V` **MUSTN'T** be combined with `CHAIN_ID`.
++ `HEX_R`, `HEX_S`, and `HEX_V` **MUST NOT** be prefixed with `0x`.
++ `v` and `HEX_V` **MUST NOT** be combined with `CHAIN_ID`.
 + Hot Wallet **MUST** fold `CHAIN_ID` into the `v` value when constructing final transaction RLP.
 
 Pseudocode for folding in `CHAIN_ID` into `v`:
@@ -263,7 +270,7 @@ if chainId > 0 {
 
 #### Substrate Signature
 
-TBD
+TODO
 
 ## Copyright
 
