@@ -14,14 +14,14 @@ This document proposes a standard for QR code encoding that enables two-way comm
 
 The common ways to encode binary data in a QR code would include:
 
-+ Base64 ASCII representation with Binary QR encoding: ~33.3% overhead.
++ Base64 US-ASCII representation with Binary QR encoding: ~33.3% overhead.
 + Hexadecimal representation with Alphanumeric QR encoding: 37.5% overhead.
-+ Hexadecimal ASCII representation with Binary QR encoding: 100% overhead.
++ Hexadecimal US-ASCII representation with Binary QR encoding: 100% overhead.
 + Native Binary QR encoding: *no overhead*.
 
 For data density and simplicity **this standard will only use the native Binary QR encoding**.
 
-_Note:_ Base64 ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
+_Note:_ Base64 US-ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
 
 ## Nomenclature
 
@@ -40,8 +40,8 @@ For describing binary data this standard uses either a single byte index `[n]`, 
 
 For byte values this standard uses either a single hexadecimal value `AA`, or a range `AA...BB`, which is left and right inclusive:
 
-+ `00` is a single ASCII `nul` byte.
-+ `61...7A` is a range including all lowercase ASCII letters `a` to `z`.
++ `00` is a single US-ASCII `nul` byte.
++ `61...7A` is a range including all lowercase US-ASCII letters `a` to `z`.
 
 Additionally we will define the following terms to mean:
 
@@ -75,7 +75,7 @@ address         = STRING
 
 The `address` format depends on the `scheme`.
 
-+ `scheme` **MUST** be valid ASCII, beginning with a letter and followed by any number of letters, numbers, the period `.` character, the plus `+` character, or the hyphen `-` character.
++ `scheme` **MUST** be valid US-ASCII, beginning with a letter and followed by any number of letters, numbers, the period `.` character, the plus `+` character, or the hyphen `-` character.
 + `address` **MUST** be valid UTF-8, appropriate for a given network.
 + Cold Signer **MUST NOT** add any other information other than `scheme` and `address` to the string.
 + Hot Wallet **MAY** be able to read other information than required (such as is defined in EIP-681).
@@ -114,9 +114,11 @@ Payload is always read left-to-right, using prefixing to determine how it needs 
 | `[0]`     | `[1..]`                                             |
 |-----------|-----------------------------------------------------|
 | `00`      | [**Multipart Payload**](#multipart-payload)         |
-| `01`      | [Ethereum Payload](#ethereum-payload)               |
-| `02`      | [Substrate Payload](#substrate-payload)             |
-| `03...7A` | Extension range for other networks                  |
+| `01...44` | Extension range for other networks                  |
+| `45`      | [Ethereum Payload](#ethereum-payload)               |
+| `46...52` | Extension range for other networks                  |
+| `53`      | [Substrate Payload](#substrate-payload)             |
+| `54...7A` | Extension range for other networks                  |
 | `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload) |
 | `7C...7F` | Extension range for other networks                  |
 | `80...FF` | Reserved                                            |
@@ -142,13 +144,13 @@ Once all frames are combined, the `part_data` must be concatenated into a single
 
 #### Ethereum Payload
 
-Ethereum Payload follows the table:
+Byte `45` is the US-ASCII byte representing the capital letter `E`. Ethereum Payload follows the table:
 
 | Action             | `[0]` | `[1]` | `[2..22]` | `[22..]`  |
 |--------------------|-------|-------|-----------|-----------|
-| Sign a hash        | `01`  | `00`  | `address` | `hash`    |
-| Sign a transaction | `01`  | `01`  | `address` | `rlp`     |
-| Sign a message     | `01`  | `02`  | `address` | `message` |
+| Sign a hash        | `45`  | `00`  | `address` | `hash`    |
+| Sign a transaction | `45`  | `01`  | `address` | `rlp`     |
+| Sign a message     | `45`  | `02`  | `address` | `message` |
 
 + `address` **MUST NOT** have any prefixes.
 + `address` **MUST** be exactly 20 bytes long.
@@ -161,20 +163,19 @@ Ethereum Payload follows the table:
 + Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user, so that the user can verify that the message hasn't been altered by the Hot Wallet.
 + Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure, because there is no easy way for the user to verify whether they are signing what they intended to sign.
 + Hot Wallet **SHOULD** have a way to show [Legacy Ethereum Payload](#legacy-ethereum-payload) at user request.
-+ Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
 TODO: Handle [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data.
 
 #### Substrate Payload
 
-Substrate Payload follows the table:
+Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Payload follows the table:
 
 | Action                       | `[0]` | `[1]`  | `[2]`  | `[1..1+L]`  | `[1+L..]`                  |
 |------------------------------|-------|--------|--------|-------------|----------------------------|
-| Sign a transaction           | `02`  |`crypto`|  `00`  | `accountid` | `payload`                  |
-| Sign a transaction           | `02`  |`crypto`|  `01`  | `accountid` | `payload_hash`             |
-| Sign an immortal transaction | `02`  |`crypto`|  `02`  | `accountid` | `immortal_payload`         |
-| Sign a message               | `02`  |`crypto`|  `03`  | `accountid` | `message`                  |
+| Sign a transaction           | `53`  |`crypto`|  `00`  | `accountid` | `payload`                  |
+| Sign a transaction           | `53`  |`crypto`|  `01`  | `accountid` | `payload_hash`             |
+| Sign an immortal transaction | `53`  |`crypto`|  `02`  | `accountid` | `immortal_payload`         |
+| Sign a message               | `53`  |`crypto`|  `03`  | `accountid` | `message`                  |
 
 
 + `crypto` **MUST** be a recognised cryptographic algorithm. It implies the value of the `accountid` length, `L`. This **MUST** be one byte whose value is one of:
@@ -191,10 +192,11 @@ Substrate Payload follows the table:
 + Cold Signer **SHOULD** attempt to decode the `message` as UTF-8 encoded human readable string by whatever heuristics it finds suitable and display it to the user for verification before signing.
 + Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure, in the cash of type `01`.
 + Cold Signer **SHOULD** (at the user's discretion) sign the `message`, `immortal_payload`, or `payload` if `payload` is of length 256 bytes or fewer. If `payload` is longer than 256 bytes, then it **SHOULD** instead sign the Blake2s hash of `payload`.
++ Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
 #### Legacy Ethereum Payload
 
-Byte `7B` is the ASCII byte representing open curly brace `{`, for that reason it's treated as a prefix for older, deprecated format. This Payload should be decoded in full as UTF-8 encoded JSON, following either of the two variants:
+Byte `7B` is the US-ASCII byte representing open curly brace `{`, for that reason it's treated as a prefix for older, deprecated format. This Payload should be decoded in full as UTF-8 encoded JSON, following either of the two variants:
 
 ```json
 {
