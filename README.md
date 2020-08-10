@@ -68,15 +68,17 @@ Since this is a multi-step process, we will differentiate between the following 
 The goal of this step is for Cold Signer to inform the Hot Wallet about a single account it has access to. To make this useful outside of the scope of this specification, this standard proposes using URI format compatible with [EIP-681](https://eips.ethereum.org/EIPS/eip-681) and [EIP-831](https://eips.ethereum.org/EIPS/eip-831), with syntax:
 
 ```
-introduction    = scheme ":" address
+introduction    = scheme ":" address | scheme ":" address ":" name
 scheme          = STRING
 address         = STRING
+name            = STRING
 ```
 
-The `address` format depends on the `scheme`.
-
++ The `address` format depends on the `scheme`.
++ The `name` is an optional display name.
 + `scheme` **MUST** be valid US-ASCII, beginning with a letter and followed by any number of letters, numbers, the period `.` character, the plus `+` character, or the hyphen `-` character.
 + `address` **MUST** be valid UTF-8, appropriate for a given network.
++ `name` **MUST** be valid UTF-8 and can include the character `:`.
 + Cold Signer **MUST NOT** add any other information other than `scheme` and `address` to the string.
 + Hot Wallet **MAY** be able to read other information than required (such as is defined in EIP-681).
 + Hot Wallet **MAY** support any number of schemes/networks following this syntax.
