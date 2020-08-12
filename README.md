@@ -68,36 +68,49 @@ Since this is a multi-step process, we will differentiate between the following 
 The goal of this step is for Cold Signer to inform the Hot Wallet about a single account it has access to. To make this useful outside of the scope of this specification, this standard proposes using URI format compatible with [EIP-681](https://eips.ethereum.org/EIPS/eip-681) and [EIP-831](https://eips.ethereum.org/EIPS/eip-831), with syntax:
 
 ```
-introduction    = scheme ":" address
+introduction    = scheme ":" details
 scheme          = STRING
-address         = STRING
+details         = STRING
 ```
 
-The `address` format depends on the `scheme`.
-
++ The `details` format depends on the `scheme`.
 + `scheme` **MUST** be valid US-ASCII, beginning with a letter and followed by any number of letters, numbers, the period `.` character, the plus `+` character, or the hyphen `-` character.
-+ `address` **MUST** be valid UTF-8, appropriate for a given network.
-+ Cold Signer **MUST NOT** add any other information other than `scheme` and `address` to the string.
++ `details` **MUST** be valid UTF-8, appropriate for a given network.
++ Cold Signer **MUST NOT** add any other information other than `scheme` and `details` to the string.
 + Hot Wallet **MAY** be able to read other information than required (such as is defined in EIP-681).
 + Hot Wallet **MAY** support any number of schemes/networks following this syntax.
 + For unsupported schemes/networks Hot Wallet **MUST** show the user an informative error, distinct from parsing failure, eg: `"Scheme {scheme} is not supported by {wallet name}"`.
 
 #### Ethereum Introduction
 
+```
+details = address | address "@" chainid | address "@" chainid ":" name
+```
+
 + `scheme` **MUST** be a string `ethereum`.
 + `address` **MUST** be a hexadecimal string representation of the address.
 + `address` **MUST** be prefixed with `0x`
++ `chainid` **MUST** be a decimal number.
++ `chainid` **SHOULD** map onto a proper value at [https://chainid.network/](https://chainid.network/).
++ `name` is an optional display name.
 
 A correct Introduction for address zero (`0x0000000000000000000000000000000000000000`) on Ethereum is therefore a string:
 
 ```
-ethereum:0x0000000000000000000000000000000000000000
+ethereum:0x0000000000000000000000000000000000000000@1
 ```
 
 #### Substrate Introduction
 
+```
+details = address | address ":" genesishash | address ":" genesishash ":" name
+```
+
 + `scheme` **MUST** be a string `substrate`.
 + `address` **MUST** be base58 representation of the address.
++ `genesishash` **MUST** be a hexadecimal representation of the genesis hash of a given substrate network.
++ `genesishash` **MUST** be prefixed with `0x`.
++ `name` **MUST** be valid UTF-8 and can include the character `:`.
 
 A correct Introduction for address `5GKhfyctwmW5LQdGaHTyU9qq2yDtggdJo719bj5ZUxnVGtmX` on a Substrate-based network is therefore a string:
 
