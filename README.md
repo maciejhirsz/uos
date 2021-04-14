@@ -10,19 +10,6 @@ This document proposes a standard for QR code encoding that enables two-way comm
 + **Unambiguous** - there must be one, and only one, way for the payload to be signed to be interpreted by a correct implementation following this standard.
 + **Extensible** - it should be possible to add support for new networks and new cryptography on existing networks (should such need emerge) in the future, without breaking backwards compatibility.
 
-## [QR code encoding](https://en.wikipedia.org/wiki/QR_code#Storage)
-
-The common ways to encode binary data in a QR code would include:
-
-+ Base64 US-ASCII representation with Binary QR encoding: ~33.3% overhead.
-+ Hexadecimal representation with Alphanumeric QR encoding: 37.5% overhead.
-+ Hexadecimal US-ASCII representation with Binary QR encoding: 100% overhead.
-+ Native Binary QR encoding: *no overhead*.
-
-For data density and simplicity **this standard will only use the native Binary QR encoding**.
-
-_Note:_ Base64 US-ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
-
 ## Nomenclature
 
 Since this technology requires two separate devices/applications, to avoid confusion the following names will be used to differentiate the two:
@@ -48,6 +35,40 @@ Additionally we will define the following terms to mean:
 + **MUST** and **MUST NOT** - expected behavior, breaking which break compatibility with this standard.
 + **SHOULD** and **SHOULD NOT** - expected behavior although more fuzzily defined and breaking of which does not break compatibility with this standard.
 + **MAY** - behavior that is not part of this standard, but is allowed without breaking compatibility.
+
+## [QR code encoding](https://en.wikipedia.org/wiki/QR_code#Storage)
+
+The common ways to encode binary data in a QR code would include:
+
++ Base64 US-ASCII representation with Binary QR encoding: ~33.3% overhead.
++ Hexadecimal representation with Alphanumeric QR encoding: 37.5% overhead.
++ Hexadecimal US-ASCII representation with Binary QR encoding: 100% overhead.
++ Native Binary QR encoding: *no overhead*.
+
+For data density and simplicity **this standard will only use the native Binary QR encoding**.
+
+_Note:_ Base64 US-ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
+
+### QR code prefix
+
+QR code prefix consists of 2½ bytes:
+
+| `[-2½]` | `[-2..0]`    |
+|---------|--------------|
+| `4`     | `frame_size` |
+
++ The first 4 bits indicate encoding - **MUST** be `4` for binary
++ frame_size **MUST** indicate the size of code data, in bytes.
+
+First half-byte and postfix half-byte spacer are added up to full byte; however, in this document the code data is referenced using the first byte of code section as [0]; in fact, it is misaligned in the encoding by 4 bits.
+
+### QR code data
+
+This document mostly concerns [0..frame_size] bytes following the prefix
+
+### QR code postfix
+
+After the data, a spacer half-byte (`0`) and repeating `ec11` sequence for padding. This data is used in error correction protocols and would not be addressed here.
 
 ## Steps
 
@@ -124,27 +145,56 @@ substrate:5GKhfyctwmW5LQdGaHTyU9qq2yDtggdJo719bj5ZUxnVGtmX
 
 Payload is always read left-to-right, using prefixing to determine how it needs to be read. The first prefix is single byte at index `0`:
 
-| `[0]`     | `[1..]`                                             |
-|-----------|-----------------------------------------------------|
-| `00`      | [**Multipart Payload**](#multipart-payload)         |
-| `01...44` | Extension range for other networks                  |
-| `45`      | [Ethereum Payload](#ethereum-payload)               |
-| `46...52` | Extension range for other networks                  |
-| `53`      | [Substrate Payload](#substrate-payload)             |
-| `54...7A` | Extension range for other networks                  |
-| `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload) |
-| `7C...7F` | Extension range for other networks                  |
-| `80...FF` | Reserved                                            |
+| `[0]`     | `[1..]`                                                                |
+|-----------|------------------------------------------------------------------------|
+| `00`      | [**Legacy Multipart Payload**](#legacy-multipart-payload) (deprecated) |
+| `01...44` | Extension range for other networks                                     |
+| `45`      | [Ethereum Payload](#ethereum-payload)                                  |
+| `46...52` | Extension range for other networks                                     |
+| `53`      | [Substrate Payload](#substrate-payload)                                |
+| `54...7A` | Extension range for other networks                                     |
+| `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload)                    |
+| `7C...7F` | Extension range for other networks                                     |
+| `80`      | [**RaptorQ multipart payload**](#raptorq-erasure-multipart-payload)    |
+| `81...FF` | Reserved                                                               |
 
-#### *Multipart Payload*
+#### *RaptorQ multipart payload*
 
-QR codes can only represent 2953 bytes, which is a harsh constraint as some transactions, such as contract deployment, may not fit into a single code. Multipart Payload is a way to represent a single Payload as a series of QR codes. Each QR code in Multipart Payload, or _a frame_, looks as follows:
+[RaptorQ](https://en.wikipedia.org/wiki/Raptor_code#RaptorQ_code) (RFC6330) is a variable rate (fountain) erasure code protocol with [reference implementation in Rust](https://github.com/cberner/raptorq)
+
+Wrapping payloads in RaptorQ protocol allows for arbitrary amounts of data to be tranferred reliably within reasonable time.
+
+Each QR code in RaptorQ encoded multipart payload contains following parts:
+
+| `[0]` | `[1..3]`       |
+|-------|----------------|
+| `80`  | `payload_size` |
+
+**WORK IN PROGRESS**
+
+#### *Legacy Multipart Payload*
+
+This definition of multipart payload was never implemented properly; however, the Parity Signer ecosystem generalized all payloads as multipart messages with only 1 frame; to maintain reverse compatibility, this header must be kept in 1-frame messages until support of older Signer versions is dropped.
+
+The definition and implementation were not consistent, this please use the following format for legacy Signer-compatible payloads:
+
+| `[0..5]`     | `[5..]` |
+|--------------|---------|
+| `0000010000` | `data`  |
+
++ The header **MUST** be present in all 1-frame payloads compatible with legacy Parity Signer
++ `data` **MUST NOT** begin with byte `00`, `7B` or `80`
++ This format will eventually be dropped
+
+`data` is then considered a single binary blob, and then interpreted as a completely new Payload, starting from the prefix table above.
+
+The legacy definition is shown below, *please do not implement it*.
 
 | `[0]`  | `[1..3]` | `[3..5]`      | `[5..]`     |
 |--------|----------|---------------|-------------|
 | `00`   | `frame`  | `frame_count` | `part_data` |
 
-+ `frame` **MUST** the number of current frame, represented as big-endian 16-bit unsigned integer.
++ `frame` **MUST** the number of current frame, '0000' represented as big-endian 16-bit unsigned integer.
 + `frame_count` **MUST** the total number of frames, represented as big-endian 16-bit unsigned integer.
 + `part_data` **MUST** be stored by the Cold Signer, ordered by `frame` number, until all frames are scanned.
 + Hot Wallet **MUST** continuously loop through all the frames showing each frame for about 2 seconds.
