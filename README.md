@@ -49,6 +49,19 @@ For data density and simplicity **this standard will only use the native Binary 
 
 _Note:_ Base64 US-ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
 
+There are 4 standard levels of error correction in QR codes:
+
+| Error correction level | Error tolerance |
+|------------------------|-----------------|
+| Level L (Low)          | `7%`            |
+| Level M (Medium)       | `15%`           |
+| Level Q (Quartile)     | `25%`           |
+| Level H (High)         | `30%`           |
+
+The QR codes are unlikely to be degraded on digital screens, and higher error correction level significantly increases interpretation time, thus
+
++ Lowest error correction level **SHOULD** be used
+
 ### QR code prefix
 
 QR code prefix consists of 2½ bytes:
@@ -143,36 +156,39 @@ substrate:5GKhfyctwmW5LQdGaHTyU9qq2yDtggdJo719bj5ZUxnVGtmX
 
 ### *Payload* Step.
 
-Payload is always read left-to-right, using prefixing to determine how it needs to be read. The first prefix is single byte at index `0`:
+#### Multiframe envelope
 
-| `[0]`     | `[1..]`                                                                |
+The payload is always enveloped in multipart frame. There are two standards for the envelope: RaptorQ erasure coding and legacy multipart envelope (deprecated). The type of envelope is determined by the first bit of the QR code data.
+
+| `[0]`     | Frame type                                                             |
 |-----------|------------------------------------------------------------------------|
-| `00`      | [**Legacy Multipart Payload**](#legacy-multipart-payload) (deprecated) |
-| `01...44` | Extension range for other networks                                     |
-| `45`      | [Ethereum Payload](#ethereum-payload)                                  |
-| `46...52` | Extension range for other networks                                     |
-| `53`      | [Substrate Payload](#substrate-payload)                                |
-| `54...7A` | Extension range for other networks                                     |
-| `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload)                    |
-| `7C...7F` | Extension range for other networks                                     |
-| `80`      | [**RaptorQ multipart payload**](#raptorq-erasure-multipart-payload)    |
-| `81...FF` | Reserved                                                               |
+| `00...7F` | [**Legacy Multipart Payload**](#legacy-multipart-payload) (deprecated) |
+| `80...FF` | [**RaptorQ multipart payload**](#raptorq-erasure-multipart-payload)    |
 
-#### *RaptorQ multipart payload*
+##### *RaptorQ multipart payload*
 
 [RaptorQ](https://en.wikipedia.org/wiki/Raptor_code#RaptorQ_code) (RFC6330) is a variable rate (fountain) erasure code protocol with [reference implementation in Rust](https://github.com/cberner/raptorq)
 
-Wrapping payloads in RaptorQ protocol allows for arbitrary amounts of data to be tranferred reliably within reasonable time.
+Wrapping payloads in RaptorQ protocol allows for arbitrary amounts of data to be tranferred reliably within reasonable time. It is recommended to wrap all payloads into this type of envelope.
 
 Each QR code in RaptorQ encoded multipart payload contains following parts:
 
-| `[0]` | `[1..3]`       |
-|-------|----------------|
-| `80`  | `payload_size` |
+| `[0..4]`                   | `[4..]`                     |
+|----------------------------|-----------------------------|
+| `80000000 || payload_size` | `RaptorQ serialized packet` |
 
-**WORK IN PROGRESS**
++ `payload_size` **MUST** contain payload size in bytes, represented as big-endian 32-bit unsigned integer.
++ `payload_size` **MUST NOT** exceed `7FFFFFFF`
++ `payload_size` **MUST** be identical in all codes encoding the payload
++ `payload_size` and `RaptorQ serialized packet` **MUST** be stored by the Cold Signer, in no particular order, until their amount is sufficient to decode the payload.
++ Hot Wallet **MUST** continuously loop through all the frames showing each frame for at least 1/30 seconds (recommended frame rate: 4 FPS).
++ Cold Signer **MUST** be able to start scanning the Multipart Payload _at any frame_.
++ Cold Signer **MUST NOT** expect the frames to come in any particular order.
++ Cold Signer **SHOULD** show a progress indicator of how many frames it has successfully scanned out of the estimated minimum required amount.
++ Hot Wallet **SHOULD** generate sufficient number of recovery frames (recommended overhead: 100%; minimal reasonable overhead: square root of number of packets).
++ Payloads fitting in 1 frame **SHOULD** be shown without recovery frames as static image.
 
-#### *Legacy Multipart Payload*
+##### *Legacy Multipart Payload*
 
 This definition of multipart payload was never implemented properly; however, the Parity Signer ecosystem generalized all payloads as multipart messages with only 1 frame; to maintain reverse compatibility, this header must be kept in 1-frame messages until support of older Signer versions is dropped.
 
@@ -203,9 +219,27 @@ The legacy definition is shown below, *please do not implement it*.
 + Cold Signer **SHOULD** show a progress indicator of how many frames it has successfully scanned out of the total count.
 + `part_data` for frame `0` **MUST NOT** begin with byte `00` or byte `7B`.
 
-Once all frames are combined, the `part_data` must be concatenated into a single binary blob, and then interpreted as a completely new albeit larger Payload, starting from the prefix table above.
+Once all frames are combined, the `part_data` must be concatenated into a single binary blob, and then interpreted as a completely new albeit larger Payload, starting from the prefix table below.
 
-#### Ethereum Payload
+#### Payload contents
+
+Payload is always read left-to-right, using prefixing to determine how it needs to be read. The first prefix is single byte at index `0`:
+
+| `[0]`     | `[1..]`                                                                |
+|-----------|------------------------------------------------------------------------|
+| `00`      | Reserved                                                               |
+| `01...44` | Extension range for other networks                                     |
+| `45`      | [Ethereum Payload](#ethereum-payload)                                  |
+| `46...52` | Extension range for other networks                                     |
+| `53`      | [Substrate Payload](#substrate-payload)                                |
+| `54...7A` | Extension range for other networks                                     |
+| `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload)                    |
+| `7C...7F` | Extension range for other networks                                     |
+| `80...FF` | Reserved                                                               |
+
+
+
+##### Ethereum Payload
 
 Byte `45` is the US-ASCII byte representing the capital letter `E`. Ethereum Payload follows the table:
 
@@ -229,7 +263,7 @@ Byte `45` is the US-ASCII byte representing the capital letter `E`. Ethereum Pay
 
 TODO: Handle [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data.
 
-#### Substrate Payload
+##### Substrate Payload
 
 Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Payload follows the table:
 
@@ -239,6 +273,8 @@ Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Pa
 | Sign a transaction           | `53`  |`crypto`|  `01`  | `accountid` | `payload_hash`             |
 | Sign an immortal transaction | `53`  |`crypto`|  `02`  | `accountid` | `immortal_payload`         |
 | Sign a message               | `53`  |`crypto`|  `03`  | `accountid` | `message`                  |
+| Import metadata              | `53`  | `00`   |  `80`  | `metadata`                              ||
+| Add network                  | `53`  | `00`   |  `C0`  | `network_json`                          ||
 
 
 + `crypto` **MUST** be a recognised cryptographic algorithm. It implies the value of the `accountid` length, `L`. This **MUST** be one byte whose value is one of:
@@ -257,7 +293,7 @@ Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Pa
 + Cold Signer **SHOULD** (at the user's discretion) sign the `message`, `immortal_payload`, or `payload` if `payload` is of length 256 bytes or fewer. If `payload` is longer than 256 bytes, then it **SHOULD** instead sign the Blake2s hash of `payload`.
 + Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
-#### Legacy Ethereum Payload
+##### Legacy Ethereum Payload
 
 Byte `7B` is the US-ASCII byte representing open curly brace `{`, for that reason it's treated as a prefix for older, deprecated format. This Payload should be decoded in full as UTF-8 encoded JSON, following either of the two variants:
 
