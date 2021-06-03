@@ -188,6 +188,8 @@ Each QR code in RaptorQ encoded multipart payload contains following parts:
 + Hot Wallet **SHOULD** generate sufficient number of recovery frames (recommended overhead: 100%; minimal reasonable overhead: square root of number of packets).
 + Payloads fitting in 1 frame **SHOULD** be shown without recovery frames as static image.
 
+TODO: explain structure of raptorQ packet
+
 ##### *Legacy Multipart Payload*
 
 This definition of multipart payload was never implemented properly; however, the Parity Signer ecosystem generalized all payloads as multipart messages with only 1 frame; to maintain reverse compatibility, this header must be kept in 1-frame messages until support of older Signer versions is dropped.
@@ -267,24 +269,36 @@ TODO: Handle [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data.
 
 Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Payload follows the table:
 
-| Action                       | `[0]` | `[1]`  | `[2]`  | `[1..1+L]`  | `[1+L..]`                  |
-|------------------------------|-------|--------|--------|-------------|----------------------------|
-| Sign a transaction           | `53`  |`crypto`|  `00`  | `accountid` | `payload`                  |
-| Sign a transaction           | `53`  |`crypto`|  `01`  | `accountid` | `payload_hash`             |
-| Sign an immortal transaction | `53`  |`crypto`|  `02`  | `accountid` | `immortal_payload`         |
-| Sign a message               | `53`  |`crypto`|  `03`  | `accountid` | `message`                  |
-| Import metadata              | `53`  | `00`   |  `80`  | `metadata`                              ||
-| Add network                  | `53`  | `00`   |  `C0`  | `network_json`                          ||
+| Action                       | `[0]` | `[1]`  | `[2]`  | `[1..1+L]`   | `[1+L..]`                  |
+|------------------------------|-------|--------|--------|--------------|----------------------------|
+| Sign a transaction           | `53`  |`crypto`|  `00`  | `accountid`  | `payload`                  |
+| Sign a transaction           | `53`  |`crypto`|  `01`  | `accountid`  | `payload_hash`             |
+| Sign an immortal transaction | `53`  |`crypto`|  `02`  | `accountid`  | `immortal_payload`         |
+| Sign a message               | `53`  |`crypto`|  `03`  | `accountid`  | `message`                  |
+| Import metadata              | `53`  |`signer`|  `80`  | `public_key` | `metadata`                 |
+| Import type definitions      | `53`  |`signer`|  `81`  | `public_key` | `type_definitions`         |
+| Add network                  | `53`  |`signer`|  `C0`  | `public_key` | `network_json`             |
 
 
 + `crypto` **MUST** be a recognised cryptographic algorithm. It implies the value of the `accountid` length, `L`. This **MUST** be one byte whose value is one of:
   - `0x00`: Ed25519 (`L = 32`)
   - `0x01`: Schnorr/Ristretto x25519 (`L = 32`)
-+ `accountid` **MUST** be exactly `L` bytes long.
-+ `accountid` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
+  - `0x02`: Ecdsa
++ `signer` **MUST** be a recognised signing protocol for metadata and type definitions files. It implies value of `public_key` length, `L`. Signing keys are recognised by the Signer on TOFU protocol. This **MUST** be one byte whose value is one of
+  - `0x00`: Ed25519 signed by Parity Signer (`L = 32`)
+  - `0x01`: Schnorr/Ristretto x25519 signed by Parity Signer (`L = 32`)
+  - `0x02`: Ecdsa signed by Parity Signer
+TODO: propose more options here
+  - `0xFF`: No signature (`L = 0`)
++ `accountid` or `public_key` **MUST** be exactly `L` bytes long.
++ `accountid` or `public_key` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
 + `payload` **MUST** be the SCALE encoding of the tuple of transaction items `(nonce, call, era_description, era_header)`.
 + `payload_hash` **MUST** be the Blake2s 32-byte hash of the SCALE encoding of the tuple of transaction items `(nonce, call, era_description, era_header)`.
 + `immortal_payload` **MUST** be the SCALE encoding of the tuple of transaction items `(nonce, call)`.
++ `metadata` **MUST** be runtime metadata of at least V12, with RuntimeVersion in constants.
+TODO: define the following
++ `type_definitions`
++ `network_json` must be 
 + Hot Wallet **MUST** use type `00` for signing a standard transaction type if the length of the `payload` is 256 bytes or fewer.
 + Hot Wallet **SHOULD** always prefer using type `00` even if the length of the payload is greater than 256 bytes since this allows the full payload to be provided and decoded for the user. If doing that is completely impractical (the message or the transaction is megabytes long and not suitable for Multipart Payload), type `01` may be used alternatively.
 + Cold Signer **SHOULD** decode the transaction details from the SCALE encoding and display them to the user for verification before signing.
@@ -292,6 +306,8 @@ Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Pa
 + Cold Signer **SHOULD** warn the user that signing a hash is inherently insecure, in the cash of type `01`.
 + Cold Signer **SHOULD** (at the user's discretion) sign the `message`, `immortal_payload`, or `payload` if `payload` is of length 256 bytes or fewer. If `payload` is longer than 256 bytes, then it **SHOULD** instead sign the Blake2s hash of `payload`.
 + Cold Signer **SHOULD** display all account id values in SS58Check encoding.
+
+TODO: propose compression for metadata
 
 ##### Legacy Ethereum Payload
 
