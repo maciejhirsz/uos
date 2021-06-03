@@ -10,19 +10,6 @@ This document proposes a standard for QR code encoding that enables two-way comm
 + **Unambiguous** - there must be one, and only one, way for the payload to be signed to be interpreted by a correct implementation following this standard.
 + **Extensible** - it should be possible to add support for new networks and new cryptography on existing networks (should such need emerge) in the future, without breaking backwards compatibility.
 
-## [QR code encoding](https://en.wikipedia.org/wiki/QR_code#Storage)
-
-The common ways to encode binary data in a QR code would include:
-
-+ Base64 US-ASCII representation with Binary QR encoding: ~33.3% overhead.
-+ Hexadecimal representation with Alphanumeric QR encoding: 37.5% overhead.
-+ Hexadecimal US-ASCII representation with Binary QR encoding: 100% overhead.
-+ Native Binary QR encoding: *no overhead*.
-
-For data density and simplicity **this standard will only use the native Binary QR encoding**.
-
-_Note:_ Base64 US-ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
-
 ## Nomenclature
 
 Since this technology requires two separate devices/applications, to avoid confusion the following names will be used to differentiate the two:
@@ -48,6 +35,53 @@ Additionally we will define the following terms to mean:
 + **MUST** and **MUST NOT** - expected behavior, breaking which break compatibility with this standard.
 + **SHOULD** and **SHOULD NOT** - expected behavior although more fuzzily defined and breaking of which does not break compatibility with this standard.
 + **MAY** - behavior that is not part of this standard, but is allowed without breaking compatibility.
+
+## [QR code encoding](https://en.wikipedia.org/wiki/QR_code#Storage)
+
+The common ways to encode binary data in a QR code would include:
+
++ Base64 US-ASCII representation with Binary QR encoding: ~33.3% overhead.
++ Hexadecimal representation with Alphanumeric QR encoding: 37.5% overhead.
++ Hexadecimal US-ASCII representation with Binary QR encoding: 100% overhead.
++ Native Binary QR encoding: *no overhead*.
+
+For data density and simplicity **this standard will only use the native Binary QR encoding**.
+
+_Note:_ Base64 US-ASCII representation with Alphanumeric QR encoding is impossible, as Alphanumeric QR code only permits 44 (5½ bits per character) out of the required 64 characters (6 bits per character).
+
+There are 4 standard levels of error correction in QR codes:
+
+| Error correction level | Error tolerance |
+|------------------------|-----------------|
+| Level L (Low)          | `7%`            |
+| Level M (Medium)       | `15%`           |
+| Level Q (Quartile)     | `25%`           |
+| Level H (High)         | `30%`           |
+
+The QR codes are unlikely to be degraded on digital screens, and higher error correction level significantly increases interpretation time, thus
+
++ Lowest error correction level **SHOULD** be used
+
+### QR code prefix
+
+QR code prefix consists of 2½ bytes:
+
+| `[-2½]` | `[-2..0]`    |
+|---------|--------------|
+| `4`     | `frame_size` |
+
++ The first 4 bits indicate encoding - **MUST** be `4` for binary
++ frame_size **MUST** indicate the size of code data, in bytes.
+
+First half-byte and postfix half-byte spacer are added up to full byte; however, in this document the code data is referenced using the first byte of code section as [0]; in fact, it is misaligned in the encoding by 4 bits.
+
+### QR code data
+
+This document mostly concerns [0..frame_size] bytes following the prefix
+
+### QR code postfix
+
+After the data, a spacer half-byte (`0`) and repeating `ec11` sequence for padding. This data is used in error correction protocols and would not be addressed here.
 
 ## Steps
 
@@ -122,29 +156,63 @@ substrate:5GKhfyctwmW5LQdGaHTyU9qq2yDtggdJo719bj5ZUxnVGtmX
 
 ### *Payload* Step.
 
-Payload is always read left-to-right, using prefixing to determine how it needs to be read. The first prefix is single byte at index `0`:
+#### Multiframe envelope
 
-| `[0]`     | `[1..]`                                             |
-|-----------|-----------------------------------------------------|
-| `00`      | [**Multipart Payload**](#multipart-payload)         |
-| `01...44` | Extension range for other networks                  |
-| `45`      | [Ethereum Payload](#ethereum-payload)               |
-| `46...52` | Extension range for other networks                  |
-| `53`      | [Substrate Payload](#substrate-payload)             |
-| `54...7A` | Extension range for other networks                  |
-| `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload) |
-| `7C...7F` | Extension range for other networks                  |
-| `80...FF` | Reserved                                            |
+The payload is always enveloped in multipart frame. There are two standards for the envelope: RaptorQ erasure coding and legacy multipart envelope (deprecated). The type of envelope is determined by the first bit of the QR code data.
 
-#### *Multipart Payload*
+| `[0]`     | Frame type                                                             |
+|-----------|------------------------------------------------------------------------|
+| `00...7F` | [**Legacy Multipart Payload**](#legacy-multipart-payload) (deprecated) |
+| `80...FF` | [**RaptorQ multipart payload**](#raptorq-erasure-multipart-payload)    |
 
-QR codes can only represent 2953 bytes, which is a harsh constraint as some transactions, such as contract deployment, may not fit into a single code. Multipart Payload is a way to represent a single Payload as a series of QR codes. Each QR code in Multipart Payload, or _a frame_, looks as follows:
+##### *RaptorQ multipart payload*
+
+[RaptorQ](https://en.wikipedia.org/wiki/Raptor_code#RaptorQ_code) (RFC6330) is a variable rate (fountain) erasure code protocol with [reference implementation in Rust](https://github.com/cberner/raptorq)
+
+Wrapping payloads in RaptorQ protocol allows for arbitrary amounts of data to be tranferred reliably within reasonable time. It is recommended to wrap all payloads into this type of envelope.
+
+Each QR code in RaptorQ encoded multipart payload contains following parts:
+
+| `[0..4]`                   | `[4..]`                     |
+|----------------------------|-----------------------------|
+| `80000000 || payload_size` | `RaptorQ serialized packet` |
+
++ `payload_size` **MUST** contain payload size in bytes, represented as big-endian 32-bit unsigned integer.
++ `payload_size` **MUST NOT** exceed `7FFFFFFF`
++ `payload_size` **MUST** be identical in all codes encoding the payload
++ `payload_size` and `RaptorQ serialized packet` **MUST** be stored by the Cold Signer, in no particular order, until their amount is sufficient to decode the payload.
++ Hot Wallet **MUST** continuously loop through all the frames showing each frame for at least 1/30 seconds (recommended frame rate: 4 FPS).
++ Cold Signer **MUST** be able to start scanning the Multipart Payload _at any frame_.
++ Cold Signer **MUST NOT** expect the frames to come in any particular order.
++ Cold Signer **SHOULD** show a progress indicator of how many frames it has successfully scanned out of the estimated minimum required amount.
++ Hot Wallet **SHOULD** generate sufficient number of recovery frames (recommended overhead: 100%; minimal reasonable overhead: square root of number of packets).
++ Payloads fitting in 1 frame **SHOULD** be shown without recovery frames as static image.
+
+TODO: explain structure of raptorQ packet
+
+##### *Legacy Multipart Payload*
+
+This definition of multipart payload was never implemented properly; however, the Parity Signer ecosystem generalized all payloads as multipart messages with only 1 frame; to maintain reverse compatibility, this header must be kept in 1-frame messages until support of older Signer versions is dropped.
+
+The definition and implementation were not consistent, this please use the following format for legacy Signer-compatible payloads:
+
+| `[0..5]`     | `[5..]` |
+|--------------|---------|
+| `0000010000` | `data`  |
+
++ The header **MUST** be present in all 1-frame payloads compatible with legacy Parity Signer
++ `data` **MUST NOT** begin with byte `00`, `7B` or `80`
++ This format will eventually be dropped
+
+`data` is then considered a single binary blob, and then interpreted as a completely new Payload, starting from the prefix table above.
+
+The legacy definition is shown below, *please do not implement it*.
 
 | `[0]`  | `[1..3]` | `[3..5]`      | `[5..]`     |
 |--------|----------|---------------|-------------|
 | `00`   | `frame`  | `frame_count` | `part_data` |
 
-+ `frame` **MUST** the number of current frame, represented as big-endian 16-bit unsigned integer.
++ `frame` **MUST** the number of current frame, '0000' represented as big-endian 16-bit unsigned integer.
 + `frame_count` **MUST** the total number of frames, represented as big-endian 16-bit unsigned integer.
 + `part_data` **MUST** be stored by the Cold Signer, ordered by `frame` number, until all frames are scanned.
 + Hot Wallet **MUST** continuously loop through all the frames showing each frame for about 2 seconds.
@@ -153,9 +221,27 @@ QR codes can only represent 2953 bytes, which is a harsh constraint as some tran
 + Cold Signer **SHOULD** show a progress indicator of how many frames it has successfully scanned out of the total count.
 + `part_data` for frame `0` **MUST NOT** begin with byte `00` or byte `7B`.
 
-Once all frames are combined, the `part_data` must be concatenated into a single binary blob, and then interpreted as a completely new albeit larger Payload, starting from the prefix table above.
+Once all frames are combined, the `part_data` must be concatenated into a single binary blob, and then interpreted as a completely new albeit larger Payload, starting from the prefix table below.
 
-#### Ethereum Payload
+#### Payload contents
+
+Payload is always read left-to-right, using prefixing to determine how it needs to be read. The first prefix is single byte at index `0`:
+
+| `[0]`     | `[1..]`                                                                |
+|-----------|------------------------------------------------------------------------|
+| `00`      | Reserved                                                               |
+| `01...44` | Extension range for other networks                                     |
+| `45`      | [Ethereum Payload](#ethereum-payload)                                  |
+| `46...52` | Extension range for other networks                                     |
+| `53`      | [Substrate Payload](#substrate-payload)                                |
+| `54...7A` | Extension range for other networks                                     |
+| `7B`      | [Legacy Ethereum Payload](#legacy-ethereum-payload)                    |
+| `7C...7F` | Extension range for other networks                                     |
+| `80...FF` | Reserved                                                               |
+
+
+
+##### Ethereum Payload
 
 Byte `45` is the US-ASCII byte representing the capital letter `E`. Ethereum Payload follows the table:
 
@@ -179,26 +265,40 @@ Byte `45` is the US-ASCII byte representing the capital letter `E`. Ethereum Pay
 
 TODO: Handle [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data.
 
-#### Substrate Payload
+##### Substrate Payload
 
 Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Payload follows the table:
 
-| Action                       | `[0]` | `[1]`  | `[2]`  | `[1..1+L]`  | `[1+L..]`                  |
-|------------------------------|-------|--------|--------|-------------|----------------------------|
-| Sign a transaction           | `53`  |`crypto`|  `00`  | `accountid` | `payload`                  |
-| Sign a transaction           | `53`  |`crypto`|  `01`  | `accountid` | `payload_hash`             |
-| Sign an immortal transaction | `53`  |`crypto`|  `02`  | `accountid` | `immortal_payload`         |
-| Sign a message               | `53`  |`crypto`|  `03`  | `accountid` | `message`                  |
+| Action                       | `[0]` | `[1]`  | `[2]`  | `[1..1+L]`   | `[1+L..]`                  |
+|------------------------------|-------|--------|--------|--------------|----------------------------|
+| Sign a transaction           | `53`  |`crypto`|  `00`  | `accountid`  | `payload`                  |
+| Sign a transaction           | `53`  |`crypto`|  `01`  | `accountid`  | `payload_hash`             |
+| Sign an immortal transaction | `53`  |`crypto`|  `02`  | `accountid`  | `immortal_payload`         |
+| Sign a message               | `53`  |`crypto`|  `03`  | `accountid`  | `message`                  |
+| Import metadata              | `53`  |`signer`|  `80`  | `public_key` | `metadata`                 |
+| Import type definitions      | `53`  |`signer`|  `81`  | `public_key` | `type_definitions`         |
+| Add network                  | `53`  |`signer`|  `C0`  | `public_key` | `network_json`             |
 
 
 + `crypto` **MUST** be a recognised cryptographic algorithm. It implies the value of the `accountid` length, `L`. This **MUST** be one byte whose value is one of:
   - `0x00`: Ed25519 (`L = 32`)
   - `0x01`: Schnorr/Ristretto x25519 (`L = 32`)
-+ `accountid` **MUST** be exactly `L` bytes long.
-+ `accountid` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
+  - `0x02`: Ecdsa
++ `signer` **MUST** be a recognised signing protocol for metadata and type definitions files. It implies value of `public_key` length, `L`. Signing keys are recognised by the Signer on TOFU protocol. This **MUST** be one byte whose value is one of
+  - `0x00`: Ed25519 signed by Parity Signer (`L = 32`)
+  - `0x01`: Schnorr/Ristretto x25519 signed by Parity Signer (`L = 32`)
+  - `0x02`: Ecdsa signed by Parity Signer
+TODO: propose more options here
+  - `0xFF`: No signature (`L = 0`)
++ `accountid` or `public_key` **MUST** be exactly `L` bytes long.
++ `accountid` or `public_key` **MUST** be represented as a binary byte string, **NOT** hexadecimal.
 + `payload` **MUST** be the SCALE encoding of the tuple of transaction items `(nonce, call, era_description, era_header)`.
 + `payload_hash` **MUST** be the Blake2s 32-byte hash of the SCALE encoding of the tuple of transaction items `(nonce, call, era_description, era_header)`.
 + `immortal_payload` **MUST** be the SCALE encoding of the tuple of transaction items `(nonce, call)`.
++ `metadata` **MUST** be runtime metadata of at least V12, with RuntimeVersion in constants.
+TODO: define the following
++ `type_definitions`
++ `network_json` must be 
 + Hot Wallet **MUST** use type `00` for signing a standard transaction type if the length of the `payload` is 256 bytes or fewer.
 + Hot Wallet **SHOULD** always prefer using type `00` even if the length of the payload is greater than 256 bytes since this allows the full payload to be provided and decoded for the user. If doing that is completely impractical (the message or the transaction is megabytes long and not suitable for Multipart Payload), type `01` may be used alternatively.
 + Cold Signer **SHOULD** decode the transaction details from the SCALE encoding and display them to the user for verification before signing.
@@ -207,7 +307,9 @@ Byte `53` is the US-ASCII byte representing the capital letter `S`. Substrate Pa
 + Cold Signer **SHOULD** (at the user's discretion) sign the `message`, `immortal_payload`, or `payload` if `payload` is of length 256 bytes or fewer. If `payload` is longer than 256 bytes, then it **SHOULD** instead sign the Blake2s hash of `payload`.
 + Cold Signer **SHOULD** display all account id values in SS58Check encoding.
 
-#### Legacy Ethereum Payload
+TODO: propose compression for metadata
+
+##### Legacy Ethereum Payload
 
 Byte `7B` is the US-ASCII byte representing open curly brace `{`, for that reason it's treated as a prefix for older, deprecated format. This Payload should be decoded in full as UTF-8 encoded JSON, following either of the two variants:
 
